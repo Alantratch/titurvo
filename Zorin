@@ -1,0 +1,67 @@
+#!/bin/bash
+set -euo pipefail
+
+# TICGuia Padrão Zorin OS - Versão Automatizada
+# Uso: curl -s URL | sudo bash -s 0123
+
+PLAQUETA="${1:-}"
+if [[ -z "$PLAQUETA" ]]; then
+  echo "ERRO: Informe a plaqueta. Exemplo: sudo bash $0 0123"
+  exit 1
+fi
+
+USERPAD="pc$PLAQUETA"
+HOSTNAME="pc$PLAQUETA"
+
+echo "🚀 Configurando $HOSTNAME (usuário $USERPAD)..."
+
+# 1. Atualização inicial
+apt update && apt full-upgrade -y
+apt autoremove -y && apt autoclean -y
+
+# 2. Hostname
+hostnamectl set-hostname "$HOSTNAME"
+
+# 3. Usuário padrão (sem sudo)
+if ! id "$USERPAD" &>/dev/null; then
+  adduser "$USERPAD"
+fi
+deluser "$USERPAD" sudo 2>/dev/null || true
+
+# 4. SSH + Avahi
+apt install -y openssh-server avahi-daemon
+systemctl enable --now ssh avahi-daemon
+
+# 5. OnlyOffice
+snap install onlyoffice-desktopeditors
+
+# 6. Remover LibreOffice
+apt purge -y "libreoffice*"
+apt autoremove --purge -y
+
+# 7. UFW básico
+apt install -y ufw
+ufw allow 22/tcp && ufw --force enable
+
+# 8. Atualizações automáticas
+apt install -y unattended-upgrades
+dpkg-reconfigure --priority=low unattended-upgrades
+
+# 9. Ocultar master da tela de login
+mkdir -p /var/lib/AccountsService/users
+echo -e "[User]\nSystemAccount=true" > /var/lib/AccountsService/users/master
+systemctl restart accounts-daemon
+
+echo "✅ Padronização concluída!"
+echo "📋 Checklist:"
+echo "- Sistema atualizado"
+echo "- Hostname: $HOSTNAME"
+echo "- Usuário: $USERPAD (sem sudo)"
+echo "- SSH + Avahi rodando"
+echo "- OnlyOffice instalado"
+echo "- LibreOffice removido"
+echo "- UFW ativo (SSH liberado)"
+echo "- unattended-upgrades ativo"
+echo "- master oculto da tela de login"
+echo ""
+echo "Próximo passo (opcional): ./ativar-ssh-master.sh para SSH com chave"
